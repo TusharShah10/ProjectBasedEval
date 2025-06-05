@@ -216,19 +216,6 @@ def main():
         placeholder="Example: Old prompt -> New refined prompt..."
     )
     
-    # Additional context
-    with st.expander("🏗️ Additional Context"):
-        document_types = st.multiselect(
-            "Select relevant document types:",
-            ["Masterplan Report", "Landscape Report", "Engineering Report", 
-             "Infrastructure Report", "Cost Schedule", "Material Schedule"],
-            default=["Masterplan Report"]
-        )
-        
-        metric_category = st.text_input(
-            "Metric Category (optional):",
-            placeholder="e.g., Sustainability, Design Quality, Technical Compliance"
-        )
     
     # Process button
     if st.button("🚀 Refine Prompt & Generate Scenarios", type="primary"):
@@ -270,12 +257,7 @@ def main():
                 st.markdown(result)
                 
                 # Download option
-                st.download_button(
-                    label="📥 Download Results",
-                    data=result,
-                    file_name="refined_evaluation_prompt.md",
-                    mime="text/markdown"
-                )
+                
                 
             except Exception as e:
                 st.error(f"An error occurred: {str(e)}")
