@@ -165,7 +165,7 @@ Please provide the refined evaluation prompt, mock project context, and three mo
 
 # Streamlit UI
 def main():
-    st.title("🔍 Evaluation Prompt Refinement Tool")
+    st.title("🔍 ILYSMMMMMMMP")
     st.write("Refine evaluation prompts and generate mock scenarios for design firm submission assessments")
     
     # Sidebar for model selection
