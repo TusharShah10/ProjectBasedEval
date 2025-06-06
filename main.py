@@ -5,6 +5,7 @@ from google.genai import types
 import time
 import os
 from dotenv import load_dotenv
+import re
 
 # Load environment variables
 load_dotenv()
@@ -53,11 +54,19 @@ CONTEXT: We evaluate design firm submissions for masterplan proposals including 
 TASK 1 - REFINE EVALUATION PROMPT:
 Create ULTRA-PRECISE scoring criteria that eliminate all vagueness. Each criterion must specify:
 
+DEFAULT SCORING STRUCTURE (when no training examples provided):
+- 100%: ALL required elements present with COMPREHENSIVE detail and specificity
+- 75%: MOST required elements present with GOOD detail, minor gaps acceptable
+- 50%: ADEQUATE elements present with MODERATE detail, some gaps acceptable
+- 25%: SOME required elements present but with MINIMAL detail or significant gaps
+- 0%: MISSING or IRRELEVANT elements, or elements mentioned with NO meaningful detail
+
 CRITICAL REQUIREMENTS FOR REFINED CRITERIA:
 1. **MATCH THE SCORING FORMAT** from the provided refined prompt examples exactly
    - If examples use ranges (e.g., "0, 10-49%, 60-99%, 100%") then use the same range format
    - If examples use absolute percentages (e.g., "0%, 25%, 50%, 75%, 100%") then use the same absolute format
    - If examples use other scoring systems, replicate that exact system
+   - If NO examples provided, use the default absolute format: 0%, 25%, 50%, 75%, 100%
    - Maintain consistency with the example format throughout all criteria
 
 2. Define EXACTLY what constitutes different levels of detail for each score band
@@ -67,33 +76,26 @@ CRITICAL REQUIREMENTS FOR REFINED CRITERIA:
 6. Include SPECIFIC examples of what qualifies for each score level
 7. Define BOTH content requirements AND quality/detail requirements for each criterion
 
-EXAMPLE OF PRECISE CRITERION (format will vary based on training examples):
+EXAMPLE OF PRECISE CRITERION (using default absolute format):
 Instead of: "Sustainability measures are addressed"
-Use format that matches the training examples provided, such as:
-
-Format A (if examples use ranges):
-"Sustainability measures: 
-- 85-100%: Includes specific sustainability certifications (LEED, BREEAM), quantified energy reduction targets (%), detailed renewable energy systems with capacity specifications
-- 50-84%: Includes general sustainability goals, mentions 2-3 specific green technologies with basic specifications
-- 25-49%: Mentions sustainability concepts but lacks specific technologies or quantified targets
-- 0-24%: No sustainability measures mentioned or only vague references"
-
-Format B (if examples use absolute percentages):
+Use:
 "Sustainability measures:
-- 100%: Comprehensive sustainability framework with specific certifications, quantified targets, and detailed implementation plans
-- 75%: Strong sustainability approach with most certifications and clear targets
-- 50%: Adequate sustainability measures with some specific elements
-- 25%: Basic sustainability considerations with minimal detail
-- 0%: No meaningful sustainability measures"
+- 100%: Comprehensive sustainability framework with specific certifications (LEED, BREEAM), quantified energy reduction targets (%), detailed renewable energy systems with capacity specifications, and comprehensive waste management protocols
+- 75%: Strong sustainability approach with most certifications mentioned, clear energy targets, and specific green technologies with basic specifications
+- 50%: Adequate sustainability measures with some specific elements, general environmental goals, and mentions of 2-3 green technologies
+- 25%: Basic sustainability considerations with minimal detail, vague environmental references, limited specific technologies
+- 0%: No meaningful sustainability measures mentioned or only generic environmental statements"
 
 TASK 2 - CREATE MOCK PROJECT CONTEXT:
 Generate concise extracted data from project documents that represents key project requirements with specific, measurable details.
 
-TASK 3 - CREATE 3 MOCK SCENARIOS:
+TASK 3 - CREATE 5 MOCK SCENARIOS:
 Generate scenarios that PRECISELY align with the scoring criteria format used:
-- High score scenario: Must hit ALL criteria at the highest level with comprehensive detail
-- Mid score scenario: Must hit criteria at the middle level with adequate but not comprehensive detail
-- Low score scenario: Must clearly fall into the lowest range with missing or minimal detail
+- 100% scenario: Must hit ALL criteria with comprehensive detail
+- 75% scenario: Must hit criteria with good detail, minor gaps acceptable
+- 50% scenario: Must hit criteria with adequate detail, some gaps acceptable
+- 25% scenario: Must hit criteria with minimal detail or significant gaps
+- 0% scenario: Must clearly have missing or inadequate detail
 
 CRITICAL REQUIREMENTS:
 - All outputs should be CONCISE but SPECIFIC
@@ -105,7 +107,7 @@ CRITICAL REQUIREMENTS:
 
 OUTPUT FORMAT:
 ## REFINED EVALUATION PROMPT
-[Ultra-precise scoring criteria using the EXACT format from training examples]
+[Ultra-precise scoring criteria using the EXACT format from training examples or default absolute format]
 
 ## MOCK PROJECT CONTEXT
 **Extracted Project Requirements:**
@@ -113,17 +115,25 @@ OUTPUT FORMAT:
 
 ## MOCK SCENARIOS
 
-### [Highest Score]% Score Scenario
+### 100% Score Scenario
 **Extracted Submission Data:**
-[Data with comprehensive detail matching highest score criteria exactly]
+[Data with comprehensive detail matching 100% criteria exactly]
 
-### [Middle Score]% Score Scenario  
+### 75% Score Scenario
 **Extracted Submission Data:**
-[Data with adequate detail matching middle score criteria exactly]
+[Data with good detail matching 75% criteria exactly]
 
-### [Lowest Score]% Score Scenario
+### 50% Score Scenario  
 **Extracted Submission Data:**
-[Data with minimal/missing detail matching lowest score criteria exactly]
+[Data with adequate detail matching 50% criteria exactly]
+
+### 25% Score Scenario
+**Extracted Submission Data:**
+[Data with minimal detail matching 25% criteria exactly]
+
+### 0% Score Scenario
+**Extracted Submission Data:**
+[Data with missing/inadequate detail matching 0% criteria exactly]
 """
 
 # Function to get refined evaluation prompt and scenarios with project context
@@ -145,11 +155,11 @@ EXAMPLE EXTRACTION OUTPUTS (Format reference):
 {example_extraction_outputs if example_extraction_outputs else "No examples provided"}
 
 EXAMPLES OF REFINED EVALUATION PROMPTS (CRITICAL - Use these to determine the EXACT scoring format to replicate):
-{refined_prompt_examples if refined_prompt_examples else "No refined prompt examples provided - use default 85-100%, 50-84%, 25-49%, 0-24% format"}
+{refined_prompt_examples if refined_prompt_examples else "No refined prompt examples provided - use default 0%, 25%, 50%, 75%, 100% format"}
 
-IMPORTANT: Analyze the refined prompt examples carefully to identify their scoring format (ranges vs absolute percentages vs other systems) and replicate that EXACT format in your refined evaluation criteria. The scoring format must be consistent with the examples provided.
+IMPORTANT: Analyze the refined prompt examples carefully to identify their scoring format (ranges vs absolute percentages vs other systems) and replicate that EXACT format in your refined evaluation criteria. If no examples are provided, use the default absolute percentage format: 0%, 25%, 50%, 75%, 100%. The scoring format must be consistent with the examples provided.
 
-Create ultra-precise evaluation criteria using the EXACT scoring format from the examples, mock project context, and three mock submission scenarios that match the scoring criteria definitions. Eliminate ALL vagueness - every criterion must have clear, measurable requirements for each score band."""
+Create ultra-precise evaluation criteria using the EXACT scoring format from the examples (or default absolute format), mock project context, and five mock submission scenarios that match the scoring criteria definitions. Eliminate ALL vagueness - every criterion must have clear, measurable requirements for each score band."""
     
     start_time = time.time()
     
@@ -216,18 +226,17 @@ Respond with only the numerical score (0-100) that reflects the overall evaluati
             score = None
             
             # Try to extract numerical score
-            import re
             score_match = re.search(r'(\d+)', score_text)
             if score_match:
                 score = int(score_match.group(1))
                 if 0 <= score <= 100:
                     # Adjust tolerance based on target score
-                    if target_score == 0:
-                        tolerance = 25  # Low score range
-                    elif target_score == 50:
-                        tolerance = 20  # Mid score range
+                    if target_score in [0, 25]:
+                        tolerance = 15  # Lower scores
+                    elif target_score in [50, 75]:
+                        tolerance = 15  # Middle scores
                     else:  # target_score == 100
-                        tolerance = 15  # High score range
+                        tolerance = 10  # High score
                     
                     validation_results[target_score] = {
                         'expected': target_score,
@@ -360,13 +369,13 @@ def main():
         placeholder="Enter examples of extracted data format..."
     )
     
-    # Training examples section - UPDATED
+    # Training examples section
     st.header("📚 Refined Evaluation Prompt Examples (Optional)")
     st.write("Provide examples of well-refined evaluation prompts. **The scoring format from these examples will be used for the output:**")
     refined_prompt_examples = st.text_area(
         "Refined Prompt Examples:",
         height=150,
-        placeholder="Enter examples of refined evaluation prompts. The tool will match the scoring format used in these examples (e.g., if you use ranges like '0, 10-49%, 60-99%, 100%' or absolute percentages like '0%, 25%, 50%, 75%, 100%')..."
+        placeholder="Enter examples of refined evaluation prompts. The tool will match the scoring format used in these examples. If no examples provided, default format will be 0%, 25%, 50%, 75%, 100%..."
     )
     
     # Process button
@@ -424,10 +433,15 @@ def main():
                     
                     # Create columns dynamically based on number of scenarios
                     num_scenarios = len(validation_results)
-                    cols = st.columns(num_scenarios)
+                    if num_scenarios <= 5:
+                        cols = st.columns(num_scenarios)
+                    else:
+                        # If more than 5 scenarios, create multiple rows
+                        cols = st.columns(min(5, num_scenarios))
                     
                     for i, (target_score, result_data) in enumerate(validation_results.items()):
-                        with cols[i]:
+                        col_index = i % len(cols)
+                        with cols[col_index]:
                             if result_data['status'] == 'success':
                                 st.metric(
                                     f"{target_score}% Scenario", 
@@ -467,25 +481,33 @@ def main():
         7. **Select Model**: Choose between Gemini or OpenAI for generation
         8. **Click Process**: Generate ultra-precise criteria and validated scenarios
         
+        ### Default Scoring Format:
+        When no refined prompt examples are provided, the tool uses absolute percentage scoring:
+        - **100%**: Comprehensive detail with all elements present
+        - **75%**: Good detail with most elements, minor gaps acceptable
+        - **50%**: Adequate detail with moderate coverage, some gaps
+        - **25%**: Minimal detail with significant gaps
+        - **0%**: Missing or inadequate information
+        
         ### Scoring Format Matching:
         The tool will automatically detect and replicate the scoring format from your refined prompt examples:
         - **Range Format**: "0, 10-49%, 60-99%, 100%" → Uses same ranges
         - **Absolute Format**: "0%, 25%, 50%, 75%, 100%" → Uses same percentages  
         - **Custom Format**: Any other system → Replicates your exact format
-        - **No Examples**: Defaults to "85-100%, 50-84%, 25-49%, 0-24%" format
-        
-        ### Refined Prompt Examples Should Include:
-        - **Your preferred scoring format** (this will be replicated exactly)
-        - **Ultra-precise criteria** with specific requirements
-        - **Measurable thresholds** for each score level
-        - **Clear quality definitions** for different detail levels
-        - **No vague language** - every term should be specific and actionable
+        - **No Examples**: Defaults to "0%, 25%, 50%, 75%, 100%" format
         
         ### Output Includes:
-        - **Ultra-Precise Evaluation Criteria**: Using your exact scoring format
+        - **Ultra-Precise Evaluation Criteria**: Using your exact scoring format or default absolute percentages
         - **Mock Project Context**: Extracted key project requirements
-        - **Mock Scenarios**: Scenarios matching your scoring format precisely
+        - **5 Mock Scenarios**: Scenarios for each score level (0%, 25%, 50%, 75%, 100% by default)
         - **Validation Results**: Actual scores achieved by scenarios when tested
+        
+        ### Key Features:
+        - **Eliminates Vagueness**: Every criterion has specific, measurable requirements
+        - **Precise Score Definitions**: Clear differentiation between all score levels
+        - **Quality + Content Requirements**: Defines both what content is needed AND the level of detail required
+        - **Exact Scenario Alignment**: Scenarios are designed to precisely match scoring criteria definitions
+        - **Comprehensive Validation**: Tests all scenarios to ensure they achieve target scores
         """)
     
 if __name__ == "__main__":
