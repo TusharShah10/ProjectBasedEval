@@ -115,7 +115,7 @@ OUTPUT FORMAT:
 """
 
 # Function to get refined evaluation prompt and scenarios with project context
-def get_evaluation_refinement(evaluation_prompt, submission_extraction_prompt, project_extraction_prompt, example_extraction_outputs, training_examples, selected_model, gemini_client, openai_client):
+def get_evaluation_refinement(evaluation_prompt, submission_extraction_prompt, project_extraction_prompt, example_extraction_outputs, refined_prompt_examples, selected_model, gemini_client, openai_client):
     system_prompt = create_system_prompt()
     
     full_prompt = f"""{system_prompt}
@@ -132,10 +132,10 @@ PROJECT EXTRACTION PROMPT (How data is extracted from project documents):
 EXAMPLE EXTRACTION OUTPUTS (Format reference):
 {example_extraction_outputs if example_extraction_outputs else "No examples provided"}
 
-TRAINING EXAMPLES (Refinement examples):
-{training_examples if training_examples else "No training examples provided"}
+EXAMPLES OF REFINED EVALUATION PROMPTS (Use these as reference for the target refinement style and structure):
+{refined_prompt_examples if refined_prompt_examples else "No refined prompt examples provided"}
 
-Create ultra-precise evaluation criteria with specific thresholds and measurable requirements, mock project context, and three mock submission scenarios that EXACTLY match the scoring criteria definitions. Eliminate ALL vagueness - every criterion must have clear, measurable requirements for each score band."""
+Create ultra-precise evaluation criteria with specific thresholds and measurable requirements, mock project context, and three mock submission scenarios that EXACTLY match the scoring criteria definitions. Use the provided refined prompt examples as reference for the level of precision and structure expected. Eliminate ALL vagueness - every criterion must have clear, measurable requirements for each score band."""
     
     start_time = time.time()
     
@@ -349,13 +349,13 @@ def main():
         placeholder="Enter examples of extracted data format..."
     )
     
-    # Training examples section
-    st.header("📚 Training Examples (Optional)")
-    st.write("Provide examples of refined prompts:")
-    training_examples = st.text_area(
-        "Training Examples:",
+    # Training examples section - CHANGED
+    st.header("📚 Refined Evaluation Prompt Examples (Optional)")
+    st.write("Provide examples of well-refined evaluation prompts that show the target end state:")
+    refined_prompt_examples = st.text_area(
+        "Refined Prompt Examples:",
         height=150,
-        placeholder="Example: Old prompt -> New refined prompt..."
+        placeholder="Enter examples of ultra-precise evaluation prompts with clear score bands and measurable criteria that represent the ideal refinement outcome..."
     )
     
     # Process button
@@ -378,7 +378,7 @@ def main():
                 # Get refinement
                 result, processing_time, cost = get_evaluation_refinement(
                     evaluation_prompt, submission_extraction_prompt, project_extraction_prompt, 
-                    example_extraction_outputs, training_examples, selected_model, gemini_client, openai_client
+                    example_extraction_outputs, refined_prompt_examples, selected_model, gemini_client, openai_client
                 )
                 
                 # Validate scenarios if enabled
@@ -447,10 +447,18 @@ def main():
         1. **Enter Evaluation Prompt**: Your current evaluation criteria
         2. **Enter Submission Extraction Prompt**: How data is extracted from submissions
         3. **Enter Project Extraction Prompt**: How key requirements are extracted from project documents
-        4. **Add Examples** (Optional): Sample extraction formats and refined prompt examples
-        5. **Enable Validation**: Automatically test scenarios with Gemini 2.0 Flash Lite
-        6. **Select Model**: Choose between Gemini or OpenAI for generation
-        7. **Click Process**: Generate ultra-precise criteria and validated scenarios
+        4. **Add Example Extraction Outputs** (Optional): Sample extraction formats
+        5. **Add Refined Prompt Examples** (Optional): Examples of well-refined evaluation prompts that show the target end state
+        6. **Enable Validation**: Automatically test scenarios with Gemini 2.0 Flash Lite
+        7. **Select Model**: Choose between Gemini or OpenAI for generation
+        8. **Click Process**: Generate ultra-precise criteria and validated scenarios
+        
+        ### Refined Prompt Examples Should Include:
+        - **Ultra-precise criteria** with specific score bands (85-100%, 50-84%, 25-49%, 0-24%)
+        - **Measurable requirements** for each score level
+        - **Specific thresholds** (e.g., "must include at least 3 examples")
+        - **Clear quality definitions** (comprehensive vs adequate vs minimal detail)
+        - **No vague language** - every term should be specific and actionable
         
         ### Output Includes:
         - **Ultra-Precise Evaluation Criteria**: Specific thresholds and measurable requirements for each score band
@@ -460,16 +468,10 @@ def main():
         
         ### Key Features:
         - **Eliminates Vagueness**: Every criterion has specific, measurable requirements
-        - **Precise Score Bands**: Clear differentiation between 85-100%, 50-84%, 25-49%, and 0-24%
+        - **Precise Score Bands**: Clear differentiation between score levels
         - **Quality + Content Requirements**: Defines both what content is needed AND the level of detail required
         - **Exact Scenario Alignment**: Scenarios are designed to precisely match scoring criteria definitions
         - **Comprehensive Validation**: Tests scenarios to ensure they achieve target scores with appropriate tolerances
-        
-        ### Scoring Philosophy:
-        - **100% Scenarios**: Must hit ALL criteria with comprehensive detail and specificity
-        - **50% Scenarios**: Must hit criteria with adequate detail but noticeable gaps
-        - **0% Scenarios**: Must clearly lack detail or have missing/irrelevant content
-        - **Quality Matters**: Having content mentioned superficially scores much lower than detailed coverage
         """)
     
 if __name__ == "__main__":
