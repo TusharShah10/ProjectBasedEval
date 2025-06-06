@@ -189,9 +189,9 @@ Create ultra-precise evaluation criteria using the EXACT scoring format from the
     
     return result, end_time - start_time, cost
 
-# Function to validate scenarios using Gemini 
+# Function to validate scenarios using Gemini with 10% tolerance
 def validate_scenarios_with_gemini(refined_criteria, project_context, scenarios, gemini_client):
-    """Validate that scenarios score as expected using Gemini"""
+    """Validate that scenarios score as expected using Gemini with 10% tolerance"""
     
     validation_results = {}
     
@@ -230,13 +230,8 @@ Respond with only the numerical score (0-100) that reflects the overall evaluati
             if score_match:
                 score = int(score_match.group(1))
                 if 0 <= score <= 100:
-                    # Adjust tolerance based on target score
-                    if target_score in [0, 25]:
-                        tolerance = 15  # Lower scores
-                    elif target_score in [50, 75]:
-                        tolerance = 15  # Middle scores
-                    else:  # target_score == 100
-                        tolerance = 10  # High score
+                    # Use 10% tolerance for all scores
+                    tolerance = 10
                     
                     validation_results[target_score] = {
                         'expected': target_score,
@@ -252,6 +247,55 @@ Respond with only the numerical score (0-100) that reflects the overall evaluati
             validation_results[target_score] = {'expected': target_score, 'actual': None, 'status': 'error', 'error': str(e)}
     
     return validation_results
+
+# Function to check if all scenarios meet the 10% tolerance
+def all_scenarios_within_tolerance(validation_results):
+    """Check if all scenarios score within 10% of their target"""
+    for target_score, result_data in validation_results.items():
+        if result_data['status'] != 'success':
+            return False
+    return True
+
+# Function to get refined evaluation with automatic regeneration
+def get_evaluation_refinement_with_regeneration(evaluation_prompt, submission_extraction_prompt, project_extraction_prompt, example_extraction_outputs, refined_prompt_examples, selected_model, gemini_client, openai_client, max_attempts=5):
+    """Generate evaluation refinement with automatic regeneration until all scenarios meet 10% tolerance"""
+    
+    total_processing_time = 0
+    total_cost = 0
+    attempt = 1
+    
+    while attempt <= max_attempts:
+        # Generate refinement
+        result, processing_time, cost = get_evaluation_refinement(
+            evaluation_prompt, submission_extraction_prompt, project_extraction_prompt, 
+            example_extraction_outputs, refined_prompt_examples, selected_model, gemini_client, openai_client
+        )
+        
+        total_processing_time += processing_time
+        total_cost += cost
+        
+        # Extract components and validate
+        refined_criteria = extract_refined_criteria_from_result(result)
+        project_context = extract_project_context_from_result(result)
+        scenarios = extract_scenarios_from_result(result)
+        
+        if refined_criteria and project_context and scenarios:
+            validation_results = validate_scenarios_with_gemini(
+                refined_criteria, project_context, scenarios, gemini_client
+            )
+            
+            # Check if all scenarios meet tolerance
+            if all_scenarios_within_tolerance(validation_results):
+                return result, total_processing_time, total_cost, validation_results, attempt
+        
+        attempt += 1
+    
+    # If max attempts reached, return last result
+    final_validation = validate_scenarios_with_gemini(
+        refined_criteria, project_context, scenarios, gemini_client
+    ) if refined_criteria and project_context and scenarios else {}
+    
+    return result, total_processing_time, total_cost, final_validation, max_attempts
 
 # Function to extract scenarios from result text
 def extract_scenarios_from_result(result_text):
@@ -395,37 +439,35 @@ def main():
                 # Initialize clients
                 gemini_client, openai_client = initialize_clients()
                 
-                # Get refinement
-                result, processing_time, cost = get_evaluation_refinement(
-                    evaluation_prompt, submission_extraction_prompt, project_extraction_prompt, 
-                    example_extraction_outputs, refined_prompt_examples, selected_model, gemini_client, openai_client
-                )
-                
-                # Validate scenarios if enabled
-                validation_results = None
+                # Get refinement with automatic regeneration
                 if enable_validation:
-                    with st.spinner("Validating scenarios with Gemini..."):
-                        # Extract components from result
-                        refined_criteria = extract_refined_criteria_from_result(result)
-                        project_context = extract_project_context_from_result(result)
-                        scenarios = extract_scenarios_from_result(result)
-                        
-                        if refined_criteria and project_context and scenarios:
-                            validation_results = validate_scenarios_with_gemini(
-                                refined_criteria, project_context, scenarios, gemini_client
-                            )
+                    result, processing_time, cost, validation_results, attempts_used = get_evaluation_refinement_with_regeneration(
+                        evaluation_prompt, submission_extraction_prompt, project_extraction_prompt, 
+                        example_extraction_outputs, refined_prompt_examples, selected_model, gemini_client, openai_client
+                    )
+                else:
+                    # Use original method without regeneration
+                    result, processing_time, cost = get_evaluation_refinement(
+                        evaluation_prompt, submission_extraction_prompt, project_extraction_prompt, 
+                        example_extraction_outputs, refined_prompt_examples, selected_model, gemini_client, openai_client
+                    )
+                    validation_results = None
+                    attempts_used = 1
                 
                 # Display results
                 st.success("✅ Refinement completed!")
                 
                 # Metrics
-                col1, col2, col3 = st.columns(3)
+                col1, col2, col3, col4 = st.columns(4)
                 with col1:
                     st.metric("Model Used", selected_model)
                 with col2:
                     st.metric("Processing Time", f"{processing_time:.2f}s")
                 with col3:
                     st.metric("Estimated Cost", f"${cost:.4f}")
+                with col4:
+                    if enable_validation:
+                        st.metric("Attempts Used", f"{attempts_used}/5")
                 
                 # Validation results
                 if validation_results:
@@ -439,6 +481,13 @@ def main():
                         # If more than 5 scenarios, create multiple rows
                         cols = st.columns(min(5, num_scenarios))
                     
+                    all_within_tolerance = all_scenarios_within_tolerance(validation_results)
+                    
+                    if all_within_tolerance:
+                        st.success("🎯 All scenarios score within 10% tolerance!")
+                    else:
+                        st.warning("⚠️ Some scenarios outside 10% tolerance after maximum attempts")
+                    
                     for i, (target_score, result_data) in enumerate(validation_results.items()):
                         col_index = i % len(cols)
                         with cols[col_index]:
@@ -448,14 +497,14 @@ def main():
                                     f"{result_data['actual']}%",
                                     delta=f"{result_data['actual'] - target_score}%"
                                 )
-                                st.success("✅ Within range")
+                                st.success("✅ Within 10%")
                             elif result_data['status'] == 'needs_adjustment':
                                 st.metric(
                                     f"{target_score}% Scenario", 
                                     f"{result_data['actual']}%",
                                     delta=f"{result_data['actual'] - target_score}%"
                                 )
-                                st.warning("⚠️ Score deviation")
+                                st.warning("⚠️ Outside 10%")
                             else:
                                 st.metric(f"{target_score}% Scenario", "Error")
                                 st.error("❌ Validation failed")
@@ -489,6 +538,14 @@ def main():
         - **25%**: Minimal detail with significant gaps
         - **0%**: Missing or inadequate information
         
+        ### Automatic Regeneration:
+        When validation is enabled, the tool automatically:
+        - **Generates scenarios** and validates them against the refined criteria
+        - **Checks 10% tolerance** for all scenarios (0%, 25%, 50%, 75%, 100%)
+        - **Regenerates automatically** if any scenario is outside 10% deviation
+        - **Continues up to 5 attempts** to achieve perfect calibration
+        - **Shows final results** when all scenarios meet tolerance or max attempts reached
+        
         ### Scoring Format Matching:
         The tool will automatically detect and replicate the scoring format from your refined prompt examples:
         - **Range Format**: "0, 10-49%, 60-99%, 100%" → Uses same ranges
@@ -499,15 +556,16 @@ def main():
         ### Output Includes:
         - **Ultra-Precise Evaluation Criteria**: Using your exact scoring format or default absolute percentages
         - **Mock Project Context**: Extracted key project requirements
-        - **5 Mock Scenarios**: Scenarios for each score level (0%, 25%, 50%, 75%, 100% by default)
+        - **5 Mock Scenarios**: Scenarios for each score level that score within 10% tolerance
         - **Validation Results**: Actual scores achieved by scenarios when tested
+        - **Attempt Counter**: Shows how many regeneration attempts were needed
         
         ### Key Features:
-        - **Eliminates Vagueness**: Every criterion has specific, measurable requirements
-        - **Precise Score Definitions**: Clear differentiation between all score levels
-        - **Quality + Content Requirements**: Defines both what content is needed AND the level of detail required
-        - **Exact Scenario Alignment**: Scenarios are designed to precisely match scoring criteria definitions
-        - **Comprehensive Validation**: Tests all scenarios to ensure they achieve target scores
+        - **Automatic Calibration**: Ensures scenarios actually score as intended
+        - **10% Tolerance**: All scenarios must score within ±10% of target
+        - **Quality Assurance**: No more scenarios that don't match their intended scores
+        - **Transparent Process**: See exactly how many attempts were needed
+        - **Comprehensive Validation**: Tests all scenarios to ensure perfect alignment
         """)
     
 if __name__ == "__main__":
