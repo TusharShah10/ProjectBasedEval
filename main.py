@@ -46,70 +46,66 @@ def calculate_cost(input_tokens, output_tokens, input_rate, output_rate):
 
 # Function to create the system prompt for evaluation refinement
 def create_system_prompt():
-    return """You are an expert in evaluation criteria design for architectural and engineering proposal assessments. Your task is to refine evaluation prompts and create realistic mock scenarios for testing.
+    return """You are an expert in evaluation criteria design for architectural and engineering proposal assessments. Your task is to refine evaluation prompts and create realistic mock extractions for testing.
 
 CONTEXT: We evaluate design firm submissions for masterplan proposals including masterplan/landscape reports, engineering/infrastructure reports, cost schedules, and material schedules against ~300 metrics across categories and sub-categories.
 
 TASK 1 - REFINE EVALUATION PROMPT:
-1. Restructure the scoring system with clear breakdowns:
-   - 0-49% (0, 1-20, 21-49): Poor/Missing
-   - 50-85% (50-60, 61-85): Adequate/Good  
-   - 86-100% (86-99, 100): Excellent/Perfect
+Create concise but extremely well-defined scoring criteria with clear score definitions:
+- 0-15%: Missing/irrelevant data that fails to address project requirements
+- 40-60%: Adequate data addressing some requirements with noticeable gaps
+- 85-100%: Comprehensive data fully addressing all project requirements
 
-2. Make criteria specific, measurable, and clear
-3. Ensure the prompt guides LLM scoring effectively
-4. Maintain professional evaluation language
+Requirements for refined criteria:
+- Make each criterion specific and measurable
+- Define exactly what constitutes 0%, 50%, and 100% performance
+- Keep criteria concise but comprehensive
+- Ensure criteria can effectively differentiate between score levels
+- Focus on comparing submission data against project requirements
 
 TASK 2 - CREATE MOCK PROJECT CONTEXT:
-Generate a realistic project context that would attract design firm submissions. This should include project requirements, scope, and specifications that the submissions would be responding to.
+Generate concise extracted data from project documents (RFP/brief) that represents key project requirements. This should be:
+- Direct extraction of essential project requirements and specifications
+- Concise bullet points of key project elements
+- Technical requirements, constraints, and deliverables
+- NOT a full project brief, just extracted key requirements
 
 TASK 3 - CREATE 3 MOCK SCENARIOS:
-Generate realistic extraction data examples that would score:
-- 100%: Perfect, comprehensive data meeting all criteria
-- 50%: Adequate data with some gaps or limitations
-- 0%: Missing, irrelevant, or completely inadequate data
+Generate realistic extracted data from submission documents that would score:
+- 100%: Comprehensive data perfectly matching project requirements
+- 50%: Adequate data with some gaps in addressing project requirements  
+- 0%: Inadequate data failing to address project requirements
 
-REQUIREMENTS FOR MOCK PROJECT CONTEXT:
-- Create a realistic architectural/engineering project that firms would submit proposals for
-- Include specific project requirements, scope, location details, and constraints
-- Make it detailed enough that submission scenarios can be contextually relevant
-- Present as a project brief or RFP summary
-
-REQUIREMENTS FOR MOCK SCENARIOS:
-- Base the mock scenarios on both the submission extraction prompt and the mock project context
-- Present as direct extractions from submission documents responding to the specific project
-- Use factual, technical language 
-- Make data detailed and realistic for architectural/engineering proposals
-- Ensure clear differentiation between score levels
-- Format as if extracted from actual proposal documents using the extraction methodology described
-- Always keep this as normal text, do not add any complicated formatting to this at all
-- For any of the mock scenarios- (avoid evaluative phrases like "lacks", "does not have" etc) AVOID AT ANY COST
-- For the 100% scenario, give mock examples which would match the criteria defined above 100% and perfectly
-- For any of the scenarios, especially the 0 percent one- there will be mentions of the items from the Submission Extraction Prompt, these would not all be "no data" or the equivalent 
-- THIS IS AN EXTRACTION and not a commentary. DO NOT add things like "The plan lays out" or "The master plan says" or "the proposal lays out" or other such statements. Be smart, this is an extraction not a summary. It should seem like this is directly there in the proposal, when you extract it, it would not say "The proposal"
-- Good scenarios include things like "Materials will be selected in accordance with budget constraints."
-- STRICTLY Do not use double quotes in scenarios you are generating, it should be just plain text
+CRITICAL REQUIREMENTS:
+- All outputs should be CONCISE - avoid lengthy text
+- Present as direct extractions, not commentary or summaries
+- NO phrases like "The project lays out", "The proposal states", etc.
+- Format as factual data points that would be extracted from actual documents
+- Ensure 100% scenario data closely aligns with project context requirements
+- Ensure 0% scenario data has clear misalignment with project context
+- Keep all text plain and direct
 
 OUTPUT FORMAT:
 ## REFINED EVALUATION PROMPT
-[Refined prompt with clear scoring structure]
+[Concise, well-defined scoring criteria with clear 0%, 50%, 100% definitions]
 
 ## MOCK PROJECT CONTEXT
-[Detailed project context that submissions would be responding to]
+**Extracted Project Requirements:**
+[Concise extracted data representing key project requirements]
 
 ## MOCK SCENARIOS
 
 ### 100% Score Scenario
-**Extracted Data:**
-[Detailed extraction that perfectly meets criteria, based on the extraction prompt methodology and project context]
+**Extracted Submission Data:**
+[Data that comprehensively addresses project requirements]
 
 ### 50% Score Scenario  
-**Extracted Data:**
-[Partial extraction with some gaps, based on the extraction prompt methodology and project context]
+**Extracted Submission Data:**
+[Data that partially addresses project requirements with gaps]
 
 ### 0% Score Scenario
-**Extracted Data:**
-[Missing/inadequate extraction, based on the extraction prompt methodology and project context]
+**Extracted Submission Data:**
+[Data that inadequately addresses project requirements]
 """
 
 # Function to get refined evaluation prompt and scenarios with project context
@@ -121,19 +117,19 @@ def get_evaluation_refinement(evaluation_prompt, submission_extraction_prompt, p
 ORIGINAL EVALUATION PROMPT TO REFINE:
 {evaluation_prompt}
 
-SUBMISSION EXTRACTION PROMPT (Use this to understand how data is extracted and create realistic mock scenarios):
+SUBMISSION EXTRACTION PROMPT (How data is extracted from submissions):
 {submission_extraction_prompt}
 
-PROJECT EXTRACTION PROMPT (Use this to understand how to create the mock project context):
+PROJECT EXTRACTION PROMPT (How data is extracted from project documents):
 {project_extraction_prompt}
 
-EXAMPLE EXTRACTION OUTPUTS (Use these to understand the desired format for mock scenarios):
+EXAMPLE EXTRACTION OUTPUTS (Format reference):
 {example_extraction_outputs if example_extraction_outputs else "No examples provided"}
 
-TRAINING EXAMPLES (Examples of refined prompts):
+TRAINING EXAMPLES (Refinement examples):
 {training_examples if training_examples else "No training examples provided"}
 
-Please provide the refined evaluation prompt, mock project context, and three mock scenarios as specified above. The mock scenarios should reflect realistic extracted data that would result from applying the submission extraction prompt to actual design firm documents responding to the specific project context."""
+Create refined evaluation criteria, mock project context (extracted requirements), and three mock submission scenarios. Ensure the refined criteria can effectively differentiate between the scenarios when comparing submission data against project requirements."""
     
     start_time = time.time()
     
@@ -163,9 +159,133 @@ Please provide the refined evaluation prompt, mock project context, and three mo
     
     return result, end_time - start_time, cost
 
+# Function to validate scenarios using Gemini 
+def validate_scenarios_with_gemini(refined_criteria, project_context, scenarios, gemini_client):
+    """Validate that scenarios score as expected using Gemini"""
+    
+    validation_results = {}
+    
+    for target_score, scenario_data in scenarios.items():
+        validation_prompt = f"""
+Using the evaluation criteria below, score the submission data against the project requirements. Provide only a numerical score from 0-100.
+
+EVALUATION CRITERIA:
+{refined_criteria}
+
+PROJECT REQUIREMENTS:
+{project_context}
+
+SUBMISSION DATA TO EVALUATE:
+{scenario_data}
+
+Compare the submission data against the project requirements using the evaluation criteria. Respond with only the numerical score (0-100).
+"""
+        
+        try:
+            response = gemini_client.models.generate_content(
+                model="gemini-2.0-flash-lite",
+                contents=[validation_prompt]
+            )
+            
+            # Extract score from response
+            score_text = response.text.strip()
+            score = None
+            
+            # Try to extract numerical score
+            import re
+            score_match = re.search(r'(\d+)', score_text)
+            if score_match:
+                score = int(score_match.group(1))
+                if 0 <= score <= 100:
+                    validation_results[target_score] = {
+                        'expected': target_score,
+                        'actual': score,
+                        'status': 'success' if abs(score - target_score) <= 15 else 'needs_adjustment'
+                    }
+                else:
+                    validation_results[target_score] = {'expected': target_score, 'actual': None, 'status': 'error'}
+            else:
+                validation_results[target_score] = {'expected': target_score, 'actual': None, 'status': 'error'}
+                
+        except Exception as e:
+            validation_results[target_score] = {'expected': target_score, 'actual': None, 'status': 'error', 'error': str(e)}
+    
+    return validation_results
+
+# Function to extract scenarios from result text
+def extract_scenarios_from_result(result_text):
+    """Extract individual scenarios from the generated result"""
+    scenarios = {}
+    
+    # Simple extraction - look for the scenario sections
+    lines = result_text.split('\n')
+    current_scenario = None
+    current_data = []
+    
+    for line in lines:
+        if '100% Score Scenario' in line:
+            current_scenario = 100
+            current_data = []
+        elif '50% Score Scenario' in line:
+            if current_scenario == 100:
+                scenarios[100] = '\n'.join(current_data).strip()
+            current_scenario = 50
+            current_data = []
+        elif '0% Score Scenario' in line:
+            if current_scenario == 50:
+                scenarios[50] = '\n'.join(current_data).strip()
+            current_scenario = 0
+            current_data = []
+        elif current_scenario is not None and line.strip() and not line.startswith('**') and not line.startswith('###'):
+            current_data.append(line)
+    
+    # Don't forget the last scenario
+    if current_scenario == 0:
+        scenarios[0] = '\n'.join(current_data).strip()
+    
+    return scenarios
+
+# Function to extract project context from result
+def extract_project_context_from_result(result_text):
+    """Extract project context from the generated result"""
+    lines = result_text.split('\n')
+    in_project_section = False
+    project_data = []
+    
+    for line in lines:
+        if 'MOCK PROJECT CONTEXT' in line:
+            in_project_section = True
+            continue
+        elif 'MOCK SCENARIOS' in line:
+            in_project_section = False
+            break
+        elif in_project_section and line.strip() and not line.startswith('**'):
+            project_data.append(line)
+    
+    return '\n'.join(project_data).strip()
+
+# Function to extract refined criteria from result
+def extract_refined_criteria_from_result(result_text):
+    """Extract refined criteria from the generated result"""
+    lines = result_text.split('\n')
+    in_criteria_section = False
+    criteria_data = []
+    
+    for line in lines:
+        if 'REFINED EVALUATION PROMPT' in line:
+            in_criteria_section = True
+            continue
+        elif 'MOCK PROJECT CONTEXT' in line:
+            in_criteria_section = False
+            break
+        elif in_criteria_section and line.strip() and not line.startswith('##'):
+            criteria_data.append(line)
+    
+    return '\n'.join(criteria_data).strip()
+
 # Streamlit UI
 def main():
-    st.title("🔍 ILYSMMMMMMMP")
+    st.title("🔍 Evaluation Prompt Refinement Tool")
     st.write("Refine evaluation prompts and generate mock scenarios for design firm submission assessments")
     
     # Sidebar for model selection
@@ -174,6 +294,10 @@ def main():
         "Choose AI Model:",
         ["Gemini", "OpenAI"]
     )
+    
+    # Add validation toggle
+    st.sidebar.header("Validation Options")
+    enable_validation = st.sidebar.checkbox("Enable scenario validation with Gemini 2.0  flash lite", value=True)
     
     # Main input section
     st.header("📝 Input Evaluation Prompt")
@@ -188,15 +312,15 @@ def main():
     submission_extraction_prompt = st.text_area(
         "Enter the submission extraction prompt:",
         height=150,
-        placeholder="Enter the prompt that describes how data is extracted from submission documents. This will be used to create realistic mock scenarios..."
+        placeholder="Enter the prompt that describes how data is extracted from submission documents..."
     )
 
-    # NEW: Input for project extraction prompt
+    # Input for project extraction prompt
     st.header("🏗️ Input Project Extraction Prompt")
     project_extraction_prompt = st.text_area(
         "Enter the project extraction prompt:",
         height=150,
-        placeholder="Enter the prompt that describes how to create mock project contexts that would attract design firm submissions..."
+        placeholder="Enter the prompt that describes how to extract key requirements from project documents..."
     )
 
     # Input for example extraction outputs
@@ -204,18 +328,17 @@ def main():
     example_extraction_outputs = st.text_area(
         "Enter example extraction outputs:",
         height=150,
-        placeholder="Enter one or more example extraction outputs that show the desired format for the mock scenarios..."
+        placeholder="Enter examples of extracted data format..."
     )
     
-    # Training examples section - moved to main area
+    # Training examples section
     st.header("📚 Training Examples (Optional)")
-    st.write("Provide examples of how you've manually refined prompts before:")
+    st.write("Provide examples of refined prompts:")
     training_examples = st.text_area(
         "Training Examples:",
         height=150,
         placeholder="Example: Old prompt -> New refined prompt..."
     )
-    
     
     # Process button
     if st.button("🚀 Refine Prompt & Generate Scenarios", type="primary"):
@@ -240,6 +363,20 @@ def main():
                     example_extraction_outputs, training_examples, selected_model, gemini_client, openai_client
                 )
                 
+                # Validate scenarios if enabled
+                validation_results = None
+                if enable_validation:
+                    with st.spinner("Validating scenarios with Gemini..."):
+                        # Extract components from result
+                        refined_criteria = extract_refined_criteria_from_result(result)
+                        project_context = extract_project_context_from_result(result)
+                        scenarios = extract_scenarios_from_result(result)
+                        
+                        if refined_criteria and project_context and scenarios:
+                            validation_results = validate_scenarios_with_gemini(
+                                refined_criteria, project_context, scenarios, gemini_client
+                            )
+                
                 # Display results
                 st.success("✅ Refinement completed!")
                 
@@ -252,12 +389,35 @@ def main():
                 with col3:
                     st.metric("Estimated Cost", f"${cost:.4f}")
                 
+                # Validation results
+                if validation_results:
+                    st.header("🎯 Validation Results")
+                    col1, col2, col3 = st.columns(3)
+                    
+                    for i, (target_score, result_data) in enumerate(validation_results.items()):
+                        with [col1, col2, col3][i]:
+                            if result_data['status'] == 'success':
+                                st.metric(
+                                    f"{target_score}% Scenario", 
+                                    f"{result_data['actual']}%",
+                                    delta=f"{result_data['actual'] - target_score}%"
+                                )
+                            elif result_data['status'] == 'needs_adjustment':
+                                st.metric(
+                                    f"{target_score}% Scenario", 
+                                    f"{result_data['actual']}%",
+                                    delta=f"{result_data['actual'] - target_score}%"
+                                )
+                                st.warning("⚠️ Score deviation")
+                            else:
+                                st.metric(f"{target_score}% Scenario", "Error")
+                                st.error("❌ Validation failed")
+                
                 # Main output
                 st.header("📋 Results")
                 st.markdown(result)
                 
-                # Download option
-                
+               
                 
             except Exception as e:
                 st.error(f"An error occurred: {str(e)}")
@@ -267,45 +427,25 @@ def main():
         st.markdown("""
         ### Step-by-Step Guide:
         
-        1. **Enter Evaluation Prompt**: Paste your current evaluation prompt that contains the criteria you want to refine
-        
-        2. **Enter Submission Extraction Prompt**: Provide the prompt that describes how data is extracted from submission documents. This helps create realistic mock scenarios.
-        
-        3. **Enter Project Extraction Prompt**: Provide the prompt that describes how to create mock project contexts that would attract design firm submissions.
-        
-        4. **Add Example Extraction Outputs** (Optional): Paste in one or more examples of actual extraction outputs so the tool learns the correct format.
-        
-        5. **Add Training Examples** (Optional): Provide examples of how you've manually refined prompts before to guide the refinement process.
-        
-        6. **Select Model**: Choose between Gemini or OpenAI for processing
-        
-        7. **Add Context** (Optional): 
-           - Specify relevant document types
-           - Add metric category information
-        
-        8. **Click Process**: The tool will:
-           - Refine your evaluation prompt with proper scoring structure (0-49%, 50-85%, 86-100%)
-           - Generate a realistic mock project context that would attract submissions
-           - Generate 3 realistic mock scenarios for testing (100%, 50%, 0% scores) based on your extraction methodology, the example outputs you provided, and the mock project context
+        1. **Enter Evaluation Prompt**: Your current evaluation criteria
+        2. **Enter Submission Extraction Prompt**: How data is extracted from submissions
+        3. **Enter Project Extraction Prompt**: How key requirements are extracted from project documents
+        4. **Add Examples** (Optional): Sample extraction formats and refined prompt examples
+        5. **Enable Validation**: Automatically test scenarios with Gemini 
+        6. **Select Model**: Choose between Gemini or OpenAI for generation
+        7. **Click Process**: Generate refined criteria and validated scenarios
         
         ### Output Includes:
-        - **Refined Evaluation Prompt**: Restructured with clear scoring guidelines
-        - **Mock Project Context**: Realistic project details that submissions would be responding to
-        - **Mock Scenarios**: Realistic extraction data examples for each score level, created based on your extraction prompt, example formats, and project context
-        - **Performance Metrics**: Processing time and estimated cost
+        - **Refined Evaluation Prompt**: Concise, well-defined scoring criteria
+        - **Mock Project Context**: Extracted key project requirements
+        - **Mock Scenarios**: 3 scenarios (0%, 50%, 100%) with extracted submission data
+        - **Validation Results**: Actual scores achieved by scenarios when tested
         
-        ### Key Improvements:
-        - **Contextual Scenarios**: Mock scenarios are now generated in response to a specific project context, making them more realistic and relevant
-        - **Project-Driven Approach**: The mock project context ensures that submission scenarios reflect realistic responses to actual project requirements
-        - **Enhanced Realism**: By grounding scenarios in a specific project, the extracted data becomes more believable and useful for testing
-        
-        ### Tips for Best Results:
-        - Provide clear, specific evaluation criteria in your input
-        - Include detailed extraction methodology in the submission extraction prompt
-        - Make the project extraction prompt specific about the types of projects you evaluate
-        - Paste example extraction outputs so the generated scenarios match your desired format
-        - Include training examples to guide the refinement process
-        - Review the refined prompt and project context, and adjust as needed for your specific use case
+        ### Key Features:
+        - **Concise Output**: All outputs are kept brief and focused
+        - **Direct Extractions**: No commentary language, just extracted data points
+        - **Score Validation**: Scenarios are tested to ensure they achieve target scores
+        - **Well-Defined Criteria**: Clear definitions for 0%, 50%, and 100% performance levels
         """)
     
 if __name__ == "__main__":
